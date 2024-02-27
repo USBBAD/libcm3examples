@@ -18,6 +18,10 @@
 ##
 
 BINARY = cdcacm
+OBJCOPY = arm-none-eabi-objcopy
 
 include ../../Makefile.include
 
+
+hex:
+	$(OBJCOPY) -O ihex $(BINARY).elf $(BINARY).hex 
