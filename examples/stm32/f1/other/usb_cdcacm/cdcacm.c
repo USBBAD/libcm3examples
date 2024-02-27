@@ -22,6 +22,7 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/usb/usbd.h>
 #include <libopencm3/usb/cdc.h>
+#include <libopencm3/stm32/flash.h>
 
 static const struct usb_device_descriptor dev = {
 	.bLength = USB_DT_DEVICE_SIZE,
@@ -83,7 +84,7 @@ static const struct {
 		.bcdCDC = 0x0110,
 	},
 	.call_mgmt = {
-		.bFunctionLength = 
+		.bFunctionLength =
 			sizeof(struct usb_cdc_call_management_descriptor),
 		.bDescriptorType = CS_INTERFACE,
 		.bDescriptorSubtype = USB_CDC_TYPE_CALL_MANAGEMENT,
@@ -101,7 +102,7 @@ static const struct {
 		.bDescriptorType = CS_INTERFACE,
 		.bDescriptorSubtype = USB_CDC_TYPE_UNION,
 		.bControlInterface = 0,
-		.bSubordinateInterface0 = 1, 
+		.bSubordinateInterface0 = 1,
 	 }
 };
 
@@ -194,7 +195,7 @@ static enum usbd_request_return_codes cdcacm_control_request(usbd_device *usbd_d
 		// usbd_ep_write_packet(0x83, buf, 10);
 		return USBD_REQ_HANDLED;
 		}
-	case USB_CDC_REQ_SET_LINE_CODING: 
+	case USB_CDC_REQ_SET_LINE_CODING:
 		if(*len < sizeof(struct usb_cdc_line_coding))
 			return USBD_REQ_NOTSUPP;
 
@@ -230,11 +231,59 @@ static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue)
 				cdcacm_control_request);
 }
 
+
+void clockInitialize(void);
+
+/// \brief 48 MHz at SYSCLK, HSI as system clock, USB-compatible
+void clockInitialize(void)
+{
+	// Enable Internal 8 MHz HSI clock source
+	RCC_CR |= RCC_CR_HSEON;
+
+	// Wait until HSI is ready
+	while (!(RCC_CR & RCC_CR_HSERDY));
+
+	// APB 1, 36 MHz max, should not exceed, div. SYSCLK
+	RCC_CFGR |= RCC_CFGR_PPRE1_HCLK_DIV2 << 8;
+
+	RCC_CFGR &= ~RCC_CFGR_USBPRE;
+
+	{
+		// High clock requires setting latency on flash memory access, RM0008 rev. 21
+		uint32_t ws = 2;
+		volatile uint32_t reg32 = FLASH_ACR;
+		reg32 &= ~(FLASH_ACR_LATENCY_MASK << FLASH_ACR_LATENCY_SHIFT);
+		reg32 |= (ws << FLASH_ACR_LATENCY_SHIFT);
+		FLASH_ACR = reg32;
+	}
+
+	// Set PLLMUL x 9
+	RCC_CFGR |= RCC_CFGR_PLLMUL_PLL_CLK_MUL9 << 18;
+
+	// Select external as PLL clock source
+	RCC_CFGR |= RCC_CFGR_PLLSRC_HSE_CLK << 16;
+
+	// Enable PLL
+	RCC_CR |= RCC_CR_PLLON;
+
+	// Wait for PLL to get ready
+	while (!(RCC_CR & RCC_CR_PLLRDY));
+
+	// Use PLL as the SYSCLK source (8 MHz external oscillator)
+	RCC_CFGR |= RCC_CFGR_SW_SYSCLKSEL_PLLCLK;
+
+	rcc_apb1_frequency = 72000000;
+	rcc_apb2_frequency = 36000000;
+	rcc_ahb_frequency = 72000000;
+}
+
 int main(void)
 {
 	usbd_device *usbd_dev;
 
-	rcc_clock_setup_pll(&rcc_hsi_configs[RCC_CLOCK_HSI_48MHZ]);
+//	rcc_clock_setup_pll(&rcc_hsi_configs[RCC_CLOCK_HSI_48MHZ]);
+//	rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
+	clockInitialize();
 
 	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_AFIO);
