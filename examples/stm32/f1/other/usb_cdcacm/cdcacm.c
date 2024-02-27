@@ -238,19 +238,19 @@ void clockInitialize(void);
 void clockInitialize(void)
 {
 	// Enable Internal 8 MHz HSI clock source
-	RCC_CR |= RCC_CR_HSEON;
+	RCC_CR |= RCC_CR_HSION;
 
 	// Wait until HSI is ready
-	while (!(RCC_CR & RCC_CR_HSERDY));
+	while (!(RCC_CR & RCC_CR_HSIRDY));
 
 	// APB 1, 36 MHz max, should not exceed, div. SYSCLK
 	RCC_CFGR |= RCC_CFGR_PPRE1_HCLK_DIV2 << 8;
 
-	RCC_CFGR &= ~RCC_CFGR_USBPRE;
+	RCC_CFGR |= RCC_CFGR_USBPRE;
 
 	{
 		// High clock requires setting latency on flash memory access, RM0008 rev. 21
-		uint32_t ws = 2;
+		uint32_t ws = 1;
 		volatile uint32_t reg32 = FLASH_ACR;
 		reg32 &= ~(FLASH_ACR_LATENCY_MASK << FLASH_ACR_LATENCY_SHIFT);
 		reg32 |= (ws << FLASH_ACR_LATENCY_SHIFT);
@@ -258,10 +258,10 @@ void clockInitialize(void)
 	}
 
 	// Set PLLMUL x 9
-	RCC_CFGR |= RCC_CFGR_PLLMUL_PLL_CLK_MUL9 << 18;
+	RCC_CFGR |= RCC_CFGR_PLLMUL_PLL_CLK_MUL12 << 18;
 
 	// Select external as PLL clock source
-	RCC_CFGR |= RCC_CFGR_PLLSRC_HSE_CLK << 16;
+	RCC_CFGR |= RCC_CFGR_PLLSRC_HSI_CLK_DIV2 << 16;
 
 	// Enable PLL
 	RCC_CR |= RCC_CR_PLLON;
@@ -272,9 +272,9 @@ void clockInitialize(void)
 	// Use PLL as the SYSCLK source (8 MHz external oscillator)
 	RCC_CFGR |= RCC_CFGR_SW_SYSCLKSEL_PLLCLK;
 
-	rcc_apb1_frequency = 72000000;
-	rcc_apb2_frequency = 36000000;
-	rcc_ahb_frequency = 72000000;
+	rcc_apb1_frequency = 48000000;
+	rcc_apb2_frequency = 24000000;
+	rcc_ahb_frequency = 48000000;
 }
 
 int main(void)
